@@ -1,0 +1,7 @@
+Small utility for protecting USB drives from viruses.
+Copy it to USB drive and execute from there.
+It creates dummy.file file which takes all free space and these is no more space for viruses.
+To unprotect drive execute utility again or manually remove dummy.file.
+
+Utility released under the MIT license http://www.opensource.org/licenses/mit-license.php
+Home page: http://code.google.com/p/usbdummyprotect/
