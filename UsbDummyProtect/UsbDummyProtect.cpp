@@ -163,6 +163,27 @@ int Delete()
     return 0;
 }
 
+typedef HRESULT (__stdcall *SETCURRENTPROCESSEXPLICITAPPUSERMODELIDPROC)(PCWSTR AppID);
+
+bool SetAppUserModelId()
+{
+    bool ret = false;
+    HMODULE hmodShell32 = LoadLibrary(TEXT("shell32.dll"));
+    if (hmodShell32 != NULL)
+    {
+        // see if the function is exposed by the current OS
+        SETCURRENTPROCESSEXPLICITAPPUSERMODELIDPROC pfnSetCurrentProcessExplicitAppUserModelID =
+            reinterpret_cast<SETCURRENTPROCESSEXPLICITAPPUSERMODELIDPROC>(GetProcAddress(hmodShell32,
+                "SetCurrentProcessExplicitAppUserModelID"));
+        if (pfnSetCurrentProcessExplicitAppUserModelID != NULL)
+        {
+            ret = pfnSetCurrentProcessExplicitAppUserModelID(L"USB.Dummy.Protect.1.1.0.2") == S_OK;
+        }
+        FreeLibrary(hmodShell32);
+    }
+    return ret;
+}
+
 int process()
 {
     StdOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -188,9 +209,11 @@ int process()
 
     println(Id);
 
-    if (SetCurrentProcessExplicitAppUserModelID(L"USB.Dummy.Protect.1.1.0.2") == S_OK)
+    if (SetAppUserModelId())
     {
+#ifdef IDI_ICON1
         LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_ICON1)); // Preload Icon to avoid Windows 7 taskbar freesing
+#endif
         Sleep(500); // Waiting for button on taskbar
         HWND w = FindWindow(NULL, Id);
         if (w)
