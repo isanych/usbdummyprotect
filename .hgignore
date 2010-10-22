@@ -6,3 +6,4 @@ glob:*.sdf
 glob:*.user
 glob:*.suo
 glob:*.aps
+glob:Deploy
