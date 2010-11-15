@@ -7,3 +7,4 @@ glob:*.user
 glob:*.suo
 glob:*.aps
 glob:Deploy
+glob:.DS_Store

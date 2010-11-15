@@ -7,6 +7,8 @@
 #include "resource.h"
 
 LPCTSTR DummyFile = TEXT("dummy.file");
+LPCTSTR DummyFiles = TEXT("dummy.file*");
+TCHAR DummyFileN[64];
 LPCTSTR Id = TEXT("USB Dummy Protect 1.1");
 LPCTSTR EndL = TEXT("\n");
 LPCTSTR CannotCreate = TEXT("Cannot create dummy file.");
@@ -40,14 +42,14 @@ inline void println(LPCTSTR string)
     print(EndL);
 }
 
-void print(DWORD Value)
+TCHAR buf[20];
+
+LPCTSTR int2str(DWORD Value)
 {
     if (Value == 0)
     {
-        print(Zero);
-        return;
+        return Zero;
     }
-    TCHAR buf[20];
     TCHAR* p = buf + 19;
     *p = 0;
     while (Value > 0 && p > buf)
@@ -57,7 +59,18 @@ void print(DWORD Value)
         p--;
         *p = '0' + Digit;
     }
-    print(p);
+    return p;
+}
+
+LPTSTR mycpy(LPTSTR dst, LPCTSTR src)
+{
+    while (*dst++ = *src++);
+    return dst - 1;
+}
+
+void print(DWORD Value)
+{
+    print(int2str(Value));
 }
 
 LPCTSTR Dimentions[] = {TEXT("B"), TEXT("KB"), TEXT("MB"), TEXT("GB"), TEXT("TB"), TEXT("PB"), TEXT("EB"), TEXT("ZB"), TEXT("YB"), NULL};
@@ -65,15 +78,24 @@ LPCTSTR Dimentions[] = {TEXT("B"), TEXT("KB"), TEXT("MB"), TEXT("GB"), TEXT("TB"
 void printsize(__int64 Value)
 {
     LPCTSTR* Dimention = Dimentions;
+    DWORD rest = 0;
     while (*Dimention != NULL)
     {
         if (Value < 1024)
         {
             print((DWORD)Value);
+            if (rest > 0)
+            {
+                print(TEXT("."));
+                print(rest);
+            }
             print(*Dimention);
             return;
         }
+        __int64 old = Value;
         Value >>= 10;
+        old -= Value << 10;
+        rest = (DWORD)old / 102;
         Dimention++;
     }
 }
@@ -103,30 +125,23 @@ BOOL CreateDummy(HANDLE File)
         return FALSE;
     }
 
-    TCHAR VolumeName[MAX_PATH + 1];
-    TCHAR FileSystemName[MAX_PATH + 1];
-    if (!GetVolumeInformation(NULL, VolumeName, TSIZE(VolumeName), NULL, NULL, NULL, FileSystemName, TSIZE(FileSystemName)))
-    {
-        return FALSE;
-    }
-
-    bool isFat = FileSystemName[0] == 'F' && FileSystemName[1] == 'A' && FileSystemName[2] == 'T';
-    if(isFat && FileSize + FreeBytes > 4294967294L) //FAT doesn't support files more that 4GB - 2B
-    {
-        return 2;
-    }
-
     LARGE_INTEGER Offset;
-    Offset.QuadPart = FreeBytes - 1;
+    Offset.QuadPart = FileSize + FreeBytes - 1;
+    if(Offset.QuadPart > 4294967293L) //FAT doesn't support files more that 4GB - 2B
+    {
+        Offset.QuadPart = 4294967293L;
+    }
     LARGE_INTEGER Position;
-    if (!SetFilePointerEx(File, Offset, &Position, FILE_END))
+    if (!SetFilePointerEx(File, Offset, &Position, FILE_BEGIN))
     {
         return FALSE;
     }
 
-    print(TEXT("Writting "));
+    print(TEXT("Writing "));
+    print(DummyFileN);
+    print(TEXT(" "));
     printsize(FreeBytes);
-    print(TEXT(" ...\n"));
+    print(TEXT(" remaining ...\n"));
     OVERLAPPED Overlapped = {0};
     Overlapped.Offset = Position.LowPart;
     Overlapped.OffsetHigh = Position.HighPart;
@@ -136,12 +151,7 @@ BOOL CreateDummy(HANDLE File)
         return FALSE;
     }
 
-    if (!GetFileSizeEx(File, (PLARGE_INTEGER)&NewFileSize))
-    {
-        return FALSE;
-    }
-
-    return NewFileSize == FreeBytes + FileSize;
+    return TRUE;
 }
 
 inline BOOL GetDiskSpace()
@@ -151,13 +161,25 @@ inline BOOL GetDiskSpace()
 
 int Delete()
 {
-    if (!DeleteFile(DummyFile))
+    WIN32_FIND_DATA ffd;
+    HANDLE hFind = FindFirstFile(DummyFiles, &ffd);
+    int cnt = 0;
+
+    if (INVALID_HANDLE_VALUE != hFind) 
     {
-        error(CannotDelete);
-        return 1;
+        do
+        {
+            if(DeleteFile(ffd.cFileName))
+            {
+                cnt++;
+            }
+        }
+        while (FindNextFile(hFind, &ffd) != 0);
     }
+
     GetDiskSpace();
-    print(TEXT("Dummy file deleted, "));
+    print(cnt);
+    print(TEXT(" dummy file(s) deleted, "));
     printsize(FreeBytes);
     print(TEXT(" free.\n"));
     return 0;
@@ -174,10 +196,10 @@ bool SetAppUserModelId()
         // see if the function is exposed by the current OS
         SETCURRENTPROCESSEXPLICITAPPUSERMODELIDPROC pfnSetCurrentProcessExplicitAppUserModelID =
             reinterpret_cast<SETCURRENTPROCESSEXPLICITAPPUSERMODELIDPROC>(GetProcAddress(hmodShell32,
-                "SetCurrentProcessExplicitAppUserModelID"));
+            "SetCurrentProcessExplicitAppUserModelID"));
         if (pfnSetCurrentProcessExplicitAppUserModelID != NULL)
         {
-            ret = pfnSetCurrentProcessExplicitAppUserModelID(L"USB.Dummy.Protect.1.1.0.2") == S_OK;
+            ret = pfnSetCurrentProcessExplicitAppUserModelID(L"USB.Dummy.Protect.1.2.0.4") == S_OK;
         }
         FreeLibrary(hmodShell32);
     }
@@ -257,40 +279,44 @@ int process()
         return Delete();
     }
 
-    HANDLE File = CreateFile(DummyFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (File == INVALID_HANDLE_VALUE)
+    int cnt = 0;
+    while (FreeBytes > 0)
     {
-        error(CannotCreate);
-        return 1;
+        cnt++;
+        LPTSTR ret = mycpy(DummyFileN, DummyFile);
+        if (cnt > 1)
+        {
+            mycpy(ret, int2str(cnt));
+        }
+
+        HANDLE File = CreateFile(DummyFileN, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (File == INVALID_HANDLE_VALUE)
+        {
+            error(CannotCreate);
+            return 1;
+        }
+
+        if (!CreateDummy(File))
+        {
+            error(CannotCreate);
+            return 1;
+        }
+
+        if (!CloseHandle(File))
+        {
+            error(CannotClose);
+            return 1;
+        }
+
+        if (!GetDiskSpace())
+        {
+            error(DetermineSize);
+            return 1;
+        }
     }
 
-    BOOL Result = CreateDummy(File);
-    if (Result == FALSE)
-    {
-        error(CannotCreate);
-        return 1;
-    }
-
-    if (!CloseHandle(File))
-    {
-        error(CannotClose);
-        return 1;
-    }
-
-    if (Result == 2)
-    {
-        print(FatLimit);
-        Delete();
-        return 1;
-    }
-
-    if (Result == FALSE)
-    {
-        return 1;
-    }
-
-    printsize(NewFileSize);
-    print(TEXT(" dummy file created.\n"));
+    print(cnt);
+    print(TEXT(" dummy file(s) created.\n"));
     return 0;
 }
 

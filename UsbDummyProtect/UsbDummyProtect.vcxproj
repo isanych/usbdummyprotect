@@ -84,7 +84,7 @@
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
       <TurnOffAssemblyGeneration>false</TurnOffAssemblyGeneration>
-      <Version>1.1.0.2</Version>
+      <Version>1.2.0.4</Version>
       <SetChecksum>true</SetChecksum>
     </Link>
   </ItemDefinitionGroup>

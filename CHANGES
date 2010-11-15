@@ -1,3 +1,7 @@
+2010-11-14 Version 1.2
+Works on FAT with more then 4Gb free space - creates several files
+GUI version introduced - requred .Net or mono
+
 2010-10-22 Version 1.1
 Added Icons
 More detailed output, added error information
